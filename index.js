@@ -3,7 +3,7 @@ let cors = require("cors")
  let app = express();
  const jwt = require('jsonwebtoken');
 require('dotenv').config()
-const stripe = require('stripe')("dafea91334ce03e49042a919e62de4bd212fc5d3c5c1e08656122279bb16bbadca7be7506441ff2e209f59235ab8dc4eb21ee5ae96d9816168c68e22ed9247d9")
+const stripe = require('stripe')(process.env.PAYMENT_SECRET_KEY)
 app.use(cors())
 app.use(express.json())
 let port = process.env.PORT || 5000;
@@ -73,9 +73,9 @@ async function run() {
       const user = req.body;
       const query = { email: user.email }
       const existingUser = await usersCollection.findOne(query);
-
+      
       if (existingUser) {
-        return res.send({ message: 'user already exists' })
+        return res.send({ message: 'user already exists', data:existingUser })
       }
 
       const result = await usersCollection.insertOne(user);
@@ -115,9 +115,10 @@ async function run() {
 
 
     // payment related api
-    app.post('/payments', async (req, res) => {
+    app.post('/payments/:id', async (req, res) => {
+      let id = req.params.id
       const data = req.body;
-       const filter = {email:data.email ,  classid: data.classid };
+       const filter = {_id:new ObjectId(id)};
       const updateDoc = {
         $set: {
           transactionId: data.transactionId,
@@ -128,16 +129,67 @@ async function run() {
       };
 
       const result = await enrolledClasses.updateOne(filter, updateDoc);
-      res.send(result);
+
+      let enrolledClassesFIndbyid  =await enrolledClasses.findOne({ _id: new ObjectId(req.params.id) });
+      let classid = enrolledClassesFIndbyid.classid
+      
+           let findClassdetails  =await classes.findOne({ _id: new ObjectId(classid) });
+let availableseat = findClassdetails.availableseat-1 ;
+let enrolledstudents = findClassdetails.enrolledstudents+1 ;
+let _id = findClassdetails._id ;
+const filter2 = {_id:new ObjectId(_id)};
+const updateDoc2 = {
+  $set: {
+    availableseat:availableseat,
+    enrolledstudents:enrolledstudents,   
+  },
+};
+
+const result2 = await classes.updateOne(filter2, updateDoc2);
+
+
+      res.send(result2);
     })
+//     app.get('/paymentstest/:id', async (req, res) => {
+//       let enrolledClassesFIndbyid  =await enrolledClasses.findOne({ _id: new ObjectId(req.params.id) });
+//  let classid = enrolledClassesFIndbyid.classid
+ 
+//       let findClassdetails  =await classes.findOne({ _id: new ObjectId(classid) });
+//       res.send(findClassdetails)
+//     })
 
 
-
-
+    app.get('/enrolledclasses/:email', async(req, res) =>{
+      let email = req.params.email
+      const pipeline = [
+        {
+          $match: {
+            email: email,
+            enrolled:true
+          }
+        },
+        {
+          $lookup: {
+            from: 'classes',
+            localField: 'classid',
+            foreignField: '_id',
+            as: 'result'
+          }
+        }
+      ];
+      
+      const result = await enrolledClasses.aggregate(pipeline).toArray();
+      res.send(result);
+      
+    })
 
     app.get('/addnow', async(req, res) =>{
       const pipeline =[
+        
         {
+          $match: {
+            email: "rsnmiraj@gmail.com"
+          },
           '$lookup': {
             'from': 'classes', 
             'localField': 'classid', 
@@ -158,22 +210,37 @@ async function run() {
       const result = await usersCollection.find().toArray();
       res.send(result);
     });
-    app.get('/selectedclass/:email', async (req, res) => {
-      let email = req.params.email
-      let cursor = enrolledClasses.find({ email: email, enrolled:false});
-      let result = await cursor.toArray();
-      const resultClassidarray = result.map(e=>new ObjectId(e.classid))
-    const resultclassses = await classes.find({ _id: { $in:resultClassidarray } }).toArray();
-      res.send(resultclassses);
+    app.get('/selectedclass/:email', async (req, res) => { 
+
+    let email = req.params.email
+      const pipeline = [
+        {
+          $match: {
+            email: email,
+            enrolled:false
+          }
+        },
+        {
+          $lookup: {
+            from: 'classes',
+            localField: 'classid',
+            foreignField: '_id',
+            as: 'result'
+          }
+        }
+      ];
+      
+      const result = await enrolledClasses.aggregate(pipeline).toArray();
+      res.send(result);
 
     });
     
-    app.delete('/selectedclass/delete/:id/:email', async (req, res) => {
+    app.delete('/selectedclass/delete/:id', async (req, res) => {
            let deleteId = req.params.id
            let email = req.params.email
       let query = {
-        classid: deleteId,
-        email:email
+        _id: new ObjectId(deleteId),
+       
 
       }
       let deleteData = await enrolledClasses.deleteOne(query);
@@ -250,7 +317,7 @@ async function run() {
     });
     app.get("/instructor/all", async (req, res) => { 
        let cursor = usersCollection.find({ role: "instructor" });
-      let result = await cursor.toArray();
+      let result = await cursor.limit(6).toArray()
       res.send(result);
 
     });
@@ -260,6 +327,13 @@ async function run() {
       res.send(result);
  
   });
+
+  app.get("/popularinstructor", async (req, res) => { 
+    let cursor = usersCollection.find({role:'instructor'});
+    let result = await cursor.limit(6).toArray();
+    res.send(result);
+
+});
 
     app.get("/class/:classid", async (req, res) => {
       let toyid = req.params.classid
