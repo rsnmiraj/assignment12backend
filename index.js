@@ -310,6 +310,12 @@ const result2 = await classes.updateOne(filter2, updateDoc2);
     });
 
     app.get("/classes/all", async (req, res) => { 
+       let cursor = classes.find({status:'approved'});
+      let result = await cursor.toArray();
+      res.send(result);
+
+    });
+    app.get("/admin/classes/all", async (req, res) => { 
        let cursor = classes.find();
       let result = await cursor.toArray();
       res.send(result);
@@ -327,6 +333,38 @@ const result2 = await classes.updateOne(filter2, updateDoc2);
       res.send(result);
  
   });
+
+  app.get("/paymenthistory/:email", async (req, res) => { 
+    
+    let email = req.params.email
+      const pipeline = [
+        {
+          $match: {
+            email:req.params.email,
+            enrolled:true
+          }
+        },
+        {
+          $lookup: {
+            from: 'classes',
+            localField: 'classid',
+            foreignField: '_id',
+            as: 'result'
+          }
+        },
+        {
+          $sort: {
+            // Specify the field to sort by (assuming 'createdAt' field for example)
+            'result._id': -1
+          }
+        }
+      ];
+      
+      const result = await enrolledClasses.aggregate(pipeline).toArray();
+      res.send(result);
+
+});
+
 
   app.get("/popularinstructor", async (req, res) => { 
     let cursor = usersCollection.find({role:'instructor'});
