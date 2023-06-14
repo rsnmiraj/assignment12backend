@@ -3,7 +3,7 @@ let cors = require("cors")
  let app = express();
  const jwt = require('jsonwebtoken');
 require('dotenv').config()
-const stripe = require('stripe')(process.env.PAYMENT_SECRET_KEY)
+const stripe = require('stripe')('sk_test_51NI4RwCkH9R2r5PW06AmLRwuim02GwWq7T4HFSa7309zcNHGlPW8Z6AJqVZW3TEcUiMUG02RzDgfEklZA9Sg49Yo00IXWhEUAX')
 app.use(cors())
 app.use(express.json())
 let port = process.env.PORT || 5000;
@@ -22,7 +22,7 @@ const verifyJWT = (req, res, next) => {
   // bearer token
   const token = authorization.split(' ')[1];
 
-  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+  jwt.verify(token, 'dafea91334ce03e49042a919e62de4bd212fc5d3c5c1e08656122279bb16bbadca7be7506441ff2e209f59235ab8dc4eb21ee5ae96d9816168c68e22ed9247d9', (err, decoded) => {
     if (err) {
       return res.status(401).send({ error: true, message: 'unauthorized access' })
     }
